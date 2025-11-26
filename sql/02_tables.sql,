@@ -1,0 +1,177 @@
+-- =============================================
+-- SAPB1_Lite - 02_tables.sql
+-- Criação das tabelas principais (ordem pensada para FK)
+-- =============================================
+USE SAPB1_Lite;
+GO
+
+-- Empresa
+CREATE TABLE OADM (
+    CompnyCode INT PRIMARY KEY DEFAULT 1,
+    CompnyName NVARCHAR(100) NOT NULL,
+    CreateDate DATETIME DEFAULT GETDATE()
+);
+GO
+
+-- Usuários
+CREATE TABLE OUSR (
+    UserId INT IDENTITY(1,1) PRIMARY KEY,
+    UserCode NVARCHAR(50) NOT NULL UNIQUE,
+    UserName NVARCHAR(100),
+    Password NVARCHAR(256),
+    IsActive BIT DEFAULT 1,
+    CreateDate DATETIME DEFAULT GETDATE()
+);
+GO
+
+-- Moedas
+CREATE TABLE OCRN (
+    CurrCode NVARCHAR(3) PRIMARY KEY,
+    CurrName NVARCHAR(50),
+    Rate DECIMAL(15,6) DEFAULT 1,
+    UpdateDate DATETIME DEFAULT GETDATE()
+);
+GO
+
+-- Unidades de Medida
+CREATE TABLE OUOM (
+    UomId INT IDENTITY(1,1) PRIMARY KEY,
+    UomCode NVARCHAR(10) UNIQUE,
+    UomName NVARCHAR(50)
+);
+GO
+
+-- Grupos de Itens
+CREATE TABLE OITB (
+    ItmsGrpCode INT IDENTITY(1,1) PRIMARY KEY,
+    ItmsGrpName NVARCHAR(50)
+);
+GO
+
+-- Tipos de Movimentação
+CREATE TABLE OMVT (
+    MoveType INT PRIMARY KEY,
+    MoveDesc NVARCHAR(100),
+    MoveSign INT
+);
+GO
+
+-- Itens / Produtos
+CREATE TABLE OITM (
+    ItemCode NVARCHAR(50) PRIMARY KEY,
+    ItemName NVARCHAR(200) NOT NULL,
+    ItmsGrpCode INT,
+    SalUnitMsr INT, -- FK para OUOM.UomId
+    PriceBuy DECIMAL(15,2) DEFAULT 0,
+    PriceSell DECIMAL(15,2) DEFAULT 0,
+    OnHand DECIMAL(15,4) DEFAULT 0,
+    IsActive BIT DEFAULT 1,
+    CreateDate DATETIME DEFAULT GETDATE(),
+    CONSTRAINT FK_OITM_Group FOREIGN KEY (ItmsGrpCode) REFERENCES OITB(ItmsGrpCode),
+    CONSTRAINT FK_OITM_SalUom FOREIGN KEY (SalUnitMsr) REFERENCES OUOM(UomId)
+);
+GO
+
+-- Depósitos / Almoxarifado
+CREATE TABLE OWHS (
+    WhsCode NVARCHAR(10) PRIMARY KEY,
+    WhsName NVARCHAR(100),
+    CreateDate DATETIME DEFAULT GETDATE()
+);
+GO
+
+-- Estoque por Depósito
+CREATE TABLE OITW (
+    ItemCode NVARCHAR(50) NOT NULL,
+    WhsCode NVARCHAR(10) NOT NULL,
+    OnHand DECIMAL(15,4) DEFAULT 0,
+    PRIMARY KEY (ItemCode, WhsCode),
+    CONSTRAINT FK_OITW_Item FOREIGN KEY (ItemCode) REFERENCES OITM(ItemCode),
+    CONSTRAINT FK_OITW_Whs FOREIGN KEY (WhsCode) REFERENCES OWHS(WhsCode)
+);
+GO
+
+-- Movimentações de Estoque (journal)
+CREATE TABLE OINM (
+    TransId INT IDENTITY(1,1) PRIMARY KEY,
+    TransDate DATE NOT NULL,
+    ItemCode NVARCHAR(50) NOT NULL,
+    WhsCode NVARCHAR(10) NOT NULL,
+    MoveType INT NOT NULL,
+    InQty DECIMAL(15,4) DEFAULT 0,
+    OutQty DECIMAL(15,4) DEFAULT 0,
+    Price DECIMAL(15,2) DEFAULT 0,
+    TransValue DECIMAL(15,2) DEFAULT 0,
+    Balance DECIMAL(15,4) DEFAULT 0,
+    Comments NVARCHAR(200),
+    CONSTRAINT FK_OINM_Item FOREIGN KEY (ItemCode) REFERENCES OITM(ItemCode),
+    CONSTRAINT FK_OINM_Whs FOREIGN KEY (WhsCode) REFERENCES OWHS(WhsCode),
+    CONSTRAINT FK_OINM_MoveType FOREIGN KEY (MoveType) REFERENCES OMVT(MoveType)
+);
+GO
+
+-- Grupos de Parceiros (clientes/fornecedores)
+CREATE TABLE OCRG (
+    GroupCode INT IDENTITY(1,1) PRIMARY KEY,
+    GroupName NVARCHAR(50),
+    GroupType NVARCHAR(1) -- C=Cliente, F=Fornecedor, A=Ambos
+);
+GO
+
+-- Parceiros de negócio (Clientes / Fornecedores)
+CREATE TABLE OCRD (
+    CardCode NVARCHAR(20) PRIMARY KEY,
+    CardName NVARCHAR(100) NOT NULL,
+    CardType NVARCHAR(1) NOT NULL, -- C=Cliente, F=Fornecedor
+    GroupCode INT,
+    Phone1 NVARCHAR(20),
+    Email NVARCHAR(100),
+    CreateDate DATETIME DEFAULT GETDATE(),
+    CONSTRAINT FK_OCRD_Group FOREIGN KEY (GroupCode) REFERENCES OCRG(GroupCode)
+);
+GO
+
+-- Vendedores
+CREATE TABLE OSLP (
+    SlpCode INT IDENTITY(1,1) PRIMARY KEY,
+    SlpName NVARCHAR(100)
+);
+GO
+
+-- Pedidos de Venda (cabecalho)
+CREATE TABLE ORDR (
+    DocEntry INT IDENTITY(1,1) PRIMARY KEY,
+    DocNum INT NOT NULL,
+    DocDate DATE,
+    CardCode NVARCHAR(20) NOT NULL,
+    CardName NVARCHAR(100),
+    SlpCode INT,
+    DocTotal DECIMAL(15,2),
+    DocStatus NVARCHAR(1) DEFAULT 'O',
+    CONSTRAINT FK_ORDR_Card FOREIGN KEY (CardCode) REFERENCES OCRD(CardCode),
+    CONSTRAINT FK_ORDR_Slp FOREIGN KEY (SlpCode) REFERENCES OSLP(SlpCode)
+);
+GO
+
+-- Linhas do Pedido
+CREATE TABLE RDR1 (
+    LineId INT IDENTITY(1,1) PRIMARY KEY,
+    DocEntry INT NOT NULL,
+    LineNum INT NOT NULL,
+    ItemCode NVARCHAR(50) NOT NULL,
+    ItemDesc NVARCHAR(200),
+    Quantity DECIMAL(15,4) DEFAULT 0,
+    Price DECIMAL(15,2) DEFAULT 0,
+    LineTotal DECIMAL(15,2) DEFAULT 0,
+    WhsCode NVARCHAR(10),
+    CONSTRAINT FK_RDR1_Doc FOREIGN KEY (DocEntry) REFERENCES ORDR(DocEntry),
+    CONSTRAINT FK_RDR1_Item FOREIGN KEY (ItemCode) REFERENCES OITM(ItemCode),
+    CONSTRAINT FK_RDR1_Whs FOREIGN KEY (WhsCode) REFERENCES OWHS(WhsCode)
+);
+GO
+
+-- Índices simples (opcional)
+CREATE INDEX IDX_OITM_ItemName ON OITM(ItemName);
+CREATE INDEX IDX_OCRD_CardName ON OCRD(CardName);
+CREATE INDEX IDX_ORDR_CardCode ON ORDR(CardCode);
+GO
